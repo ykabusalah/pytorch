@@ -2,12 +2,16 @@ from ._ops import OpOverload
 from typing import Set
 import traceback
 import torch._C as C
-__all__ = ['extend_library']
+
+__all__ = ['extend_library', 'create_library']
 
 # User created libraries to extend existing libraries
 # Each user created library is added here to ensure that it's not automatically removed outside the
 # scope of the function it was created in.
 _impls_for_existing_libraries = {}
+
+# User created custom libraries
+libraries = {}
 
 # Set containing the combination of (namespace, operator, DispatchKey) for which a new kernel has been registered
 # The keys in the set are of the form `namespace + "/" + op_name + "/" + dispatch_key`.
@@ -27,6 +31,8 @@ class Library:
         self.dispatch_key = dispatch_key
         if kind == "IMPL":
             _impls_for_existing_libraries[id(self)] = self
+        elif kind == "DEF":
+            libraries[id(self)] = self
         else:
             raise ValueError("Unsupported kind: ", kind)
 
@@ -65,7 +71,10 @@ class Library:
     def remove(self):
         for key in self._op_impls:
             _impls.remove(key)
-        del _impls_for_existing_libraries[id(self)]
+        if self.kind == "DEF":
+            del libraries[self.ns]
+        else:
+            del _impls_for_existing_libraries[id(self)]
         del self.m
 
 # Every user can create their own IMPL to extend existing C++ libraries
@@ -85,3 +94,6 @@ def extend_library(ns, dispatch_key=""):
     """
     # TODO: check if there's an existing library with name ns
     return Library("IMPL", ns, dispatch_key)
+
+def create_library(ns):
+    return Library("DEF", ns, '', message='')
