@@ -484,6 +484,7 @@ def nll_loss_backward(
 
 
 @register_decomposition(aten.binary_cross_entropy)
+# @pw_cast_for_opmath
 def binary_cross_entropy(
     self: Tensor,
     target: Tensor,
