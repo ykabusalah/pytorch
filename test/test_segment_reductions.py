@@ -15,7 +15,7 @@ from torch.testing._internal.common_utils import (
 )
 
 
-reductions = ["max", "mean", "min", "sum"]
+reductions = ["max", "mean", "min", "sum", "prod"]
 
 
 def get_default_value(initial_value, reduction):
@@ -29,6 +29,8 @@ def get_default_value(initial_value, reduction):
         return float("Inf")
     elif reduction == "sum":
         return 0.0
+    elif reduction == "prod":
+        return 1.0
 
 
 class TestSegmentReductions(TestCase):
@@ -64,6 +66,7 @@ class TestSegmentReductions(TestCase):
             unsafe=unsafe,
             initial=initial_value,
         )
+        # print(reduction, "\n", expected_result, "\n", actual_result)
         self.assertEqual(
             expected_result, actual_result, rtol=1e-02, atol=1e-05, equal_nan=True
         )
@@ -134,6 +137,15 @@ class TestSegmentReductions(TestCase):
                 elif reduction == "sum":
                     expected_result = [1, float("nan"), 14, default_value]
                     expected_grad = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                elif reduction == "prod":
+                    if initial is not None:
+                        initial_value = 2  # 0 initial_value will zero out everything for prod
+                        default_value = get_default_value(initial_value, reduction)
+                        expected_result = [2, float("nan"), 200, default_value]
+                        expected_grad = [2.0, 6.0, float("nan"), 50.0, 40.0, 40.0]
+                    else:
+                        expected_result = [1, float("nan"), 100, default_value]
+                        expected_grad = [1.0, 3.0, float("nan"), 25.0, 20.0, 20.0]
                 for axis in [0, -1]:
                     for unsafe in [True, False]:
                         self._test_common(
@@ -231,6 +243,39 @@ class TestSegmentReductions(TestCase):
                         [1.0, 1.0],
                         [1.0, 1.0],
                     ]
+                elif reduction == "prod":
+                    if initial is not None:
+                        initial_value = 2  # 0 initial_value will zero out everything for prod
+                        default_value = get_default_value(initial_value, reduction)
+                        expected_result = [
+                            [2, 2],
+                            [float("nan"), float("nan")],
+                            [48, 12],
+                            [default_value, default_value],
+                        ]
+                        expected_grad = [
+                            [2.0, 2.0],
+                            [6.0, float("nan")],
+                            [float("nan"), 2.0],
+                            [12.0, 12.0],
+                            [16.0, 6.0],
+                            [24.0, 4.0],
+                        ]
+                    else:
+                        expected_result = [
+                            [1, 1],
+                            [float("nan"), float("nan")],
+                            [24, 6],
+                            [default_value, default_value],
+                        ]
+                        expected_grad = [
+                            [1.0, 1.0],
+                            [3.0, float("nan")],
+                            [float("nan"), 1.0],
+                            [6.0, 6.0],
+                            [8.0, 3.0],
+                            [12.0, 2.0],
+                        ]
                 for unsafe in [True, False]:
                     self._test_common(
                         reduction,
@@ -255,8 +300,8 @@ class TestSegmentReductions(TestCase):
     def test_multi_d(self, device, dtypes):
         val_dtype, length_type = dtypes
         axis = 0
-        lengths = [0, 2]
-        data = np.arange(20).reshape(2, 2, 5).tolist()
+        lengths = [0, 2, 3, 0]
+        data = np.arange(50).reshape(5, 2, 5).tolist()
         expected_grad = []
 
         # TODO: calculate grad and check correctness
@@ -267,23 +312,39 @@ class TestSegmentReductions(TestCase):
             if reduction == "max":
                 expected_result = [
                     np.full((2, 5), initial_value).tolist(),
-                    np.max(data, axis=0).tolist(),
+                    np.max(data[:2], axis=0).tolist(),
+                    np.max(data[2:], axis=0).tolist(),
+                    np.full((2, 5), initial_value).tolist(),
                 ]
             elif reduction == "mean":
                 expected_result = [
                     np.full((2, 5), initial_value).tolist(),
-                    np.mean(data, axis=0).tolist(),
+                    np.mean(data[:2], axis=0).tolist(),
+                    np.mean(data[2:], axis=0).tolist(),
+                    np.full((2, 5), initial_value).tolist(),
                 ]
             elif reduction == "min":
                 initial_value = 1000  # some high number
                 expected_result = [
                     np.full((2, 5), initial_value).tolist(),
-                    np.min(data, axis=0).tolist(),
+                    np.min(data[:2], axis=0).tolist(),
+                    np.min(data[2:], axis=0).tolist(),
+                    np.full((2, 5), initial_value).tolist(),
                 ]
             elif reduction == "sum":
                 expected_result = [
                     np.full((2, 5), initial_value).tolist(),
-                    np.sum(data, axis=0).tolist(),
+                    np.sum(data[:2], axis=0).tolist(),
+                    np.sum(data[2:], axis=0).tolist(),
+                    np.full((2, 5), initial_value).tolist(),
+                ]
+            elif reduction == "prod":
+                initial_value = 1
+                expected_result = [
+                    np.full((2, 5), initial_value).tolist(),
+                    np.prod(data[:2], axis=0).tolist(),
+                    np.prod(data[2:], axis=0).tolist(),
+                    np.full((2, 5), initial_value).tolist(),
                 ]
             for unsafe in [True, False]:
                 self._test_common(
