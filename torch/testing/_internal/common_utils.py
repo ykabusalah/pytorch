@@ -502,7 +502,11 @@ CI_TEST_PREFIX = str(Path(os.getcwd()))
 
 def wait_for_process(p):
     try:
-        return p.wait()
+        # return p.wait()
+        out, err = p.communicate()
+        print('-======HANQ stdout is', out)
+        print('=========HANQ stderr is', err)
+        return p.returncode
     except KeyboardInterrupt:
         # Give `p` a chance to handle KeyboardInterrupt. Without this,
         # `pytest` can't print errors it collected so far upon KeyboardInterrupt.
@@ -530,7 +534,7 @@ def shell(command, cwd=None, env=None):
     #
     # https://github.com/python/cpython/blob/71b6c1af727fbe13525fb734568057d78cea33f3/Lib/subprocess.py#L309-L323
     assert not isinstance(command, torch._six.string_classes), "Command to shell should be a list or tuple of tokens"
-    p = subprocess.Popen(command, universal_newlines=True, cwd=cwd, env=env)
+    p = subprocess.Popen(command, universal_newlines=True, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return wait_for_process(p)
 
 
