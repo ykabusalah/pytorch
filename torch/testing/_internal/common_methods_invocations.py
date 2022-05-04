@@ -6350,9 +6350,14 @@ def sample_inputs_legacy_solve(op_info, device, dtype, requires_grad=False, **kw
         op_info, device, dtype, requires_grad=requires_grad, vector_rhs_allowed=False
     )
 
+    def out_fn(output):
+        return output[0]
+
     # Reverses tensor order
     for sample in out:
         sample.input, sample.args = sample.args[0], (sample.input,)
+        if op_info.name == "solve":
+            sample.output_process_fn_grad = out_fn
         yield sample
 
 
@@ -6415,13 +6420,13 @@ def sample_inputs_lu_solve(op_info, device, dtype, requires_grad=False, **kwargs
 
     batches = ((), (0, ), (2, ))
     ns = (5, 3, 0)
-    nrhs = (0, 1, 6)
+    nrhs = ((0,), (1,), (6,))
 
     for n, batch, rhs in product(ns, batches, nrhs):
         A = make_a(*(batch + (n, n)))
         LU, pivots = torch.linalg.lu_factor(A)
 
-        B = make_b(batch + (n, rhs))
+        B = make_b(batch + (n,) + rhs)
 
         grads = (False,) if not requires_grad else (True, False)
         # we try all possible combinations of requires_grad for each input
@@ -14140,7 +14145,7 @@ op_db: List[OpInfo] = [
            dtypes=floating_and_complex_types(),
            sample_inputs_func=sample_inputs_legacy_solve,
            check_batched_gradgrad=False,
-           decorators=[skipCUDAIfNoMagma, skipCPUIfNoLapack]),
+           decorators=[skipCUDAIfNoMagmaAndNoCusolver, skipCPUIfNoLapack]),
     UnaryUfuncInfo('tan',
                    ref=np.tan,
                    dtypes=all_types_and_complex_and(torch.bool, torch.bfloat16),
@@ -14477,14 +14482,9 @@ op_db: List[OpInfo] = [
            op=torch.linalg.solve,
            dtypes=floating_and_complex_types(),
            sample_inputs_func=sample_inputs_linalg_solve,
-           check_batched_gradgrad=False,
            supports_forward_ad=True,
            supports_fwgrad_bwgrad=True,
-           decorators=[skipCUDAIfNoMagma, skipCPUIfNoLapack],
-           skips=(
-               # AssertionError: Scalars are not equal!
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_out'),
-           )),
+           decorators=[skipCUDAIfNoMagmaAndNoCusolver, skipCPUIfNoLapack]),
     OpInfo('linalg.solve_triangular',
            aten_name='linalg_solve_triangular',
            op=torch.linalg.solve_triangular,
@@ -16544,7 +16544,10 @@ op_db: List[OpInfo] = [
         sample_inputs_func=sample_inputs_tensorsolve,
         supports_forward_ad=True,
         supports_fwgrad_bwgrad=True,
-        decorators=[skipCPUIfNoLapack, skipCUDAIfNoMagmaAndNoCusolver],
+        decorators=[skipCUDAIfNoMagmaAndNoCusolver, skipCPUIfNoLapack,
+                    DecorateInfo(toleranceOverride({torch.float32: tol(atol=1e-03, rtol=1e-03)}),
+                                 'TestCommon', 'test_noncontiguous_samples',
+                                 device_type='cuda')],
     ),
     OpInfo(
         "nn.functional.mse_loss",
