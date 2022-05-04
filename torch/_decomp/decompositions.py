@@ -643,7 +643,6 @@ def logit(self: Tensor, eps: Optional[float] = None) -> Tensor:
     lo = eps
     hi = 1 - eps
     self = torch.clamp(self, lo, hi)
-    print(self.dtype)
     return (self / (1 - self)).log()
 
 
@@ -999,11 +998,7 @@ def native_batch_norm(
 
 @register_decomposition(aten.isnan)
 def isnan(self: Tensor) -> Tensor:
-    return torch.where(
-        self != self,
-        self.new_ones((), dtype=torch.bool),
-        self.new_zeros((), dtype=torch.bool),
-    )
+    return self != self
 
 
 @register_decomposition(aten.clamp_min)
